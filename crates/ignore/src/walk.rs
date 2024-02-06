@@ -2233,6 +2233,64 @@ mod tests {
         assert_paths(td.path(), &builder.follow_links(true), &["a", "a/b"]);
     }
 
+    #[cfg(unix)] // because symlinks on windows are weird
+    #[test]
+    fn symlink_revisit() {
+        let td = tmpdir();
+        mkdirp(td.path().join("a"));
+        mkdirp(td.path().join("b"));
+        symlink(td.path().join("b"), td.path().join("b/a"));
+
+        let mut builder = WalkBuilder::new(td.path());
+        assert_paths(td.path(), &builder, &["a", "b", "b/a"]);
+        assert_paths(td.path(), &builder.follow_links(true), &["a", "b"]);
+    }
+
+    #[ignore] // stress test only, to verify symlink_revisit option
+    #[cfg(unix)] // because symlinks on windows are weird
+    #[test]
+    fn symlink_exponential() {
+        let td = tmpdir();
+        for i in 0..16 {
+            let d = char::from_u32(('a' as u32) + i).unwrap().to_string();
+            mkdirp(td.path().join(d.clone()));
+            for j in 0..i {
+                let t = char::from_u32(('a' as u32) + j).unwrap().to_string();
+                symlink(
+                    td.path().join(t.clone()),
+                    td.path().join(format!("{}/{}", d, t)),
+                );
+            }
+        }
+
+        let mut builder = WalkBuilder::new(td.path());
+        assert_paths(
+            td.path(),
+            &builder,
+            &[
+                "a", "b", "b/a", "c", "c/a", "c/b", "d", "d/a", "d/b", "d/c",
+                "e", "e/a", "e/b", "e/c", "e/d", "f", "f/a", "f/b", "f/c",
+                "f/d", "f/e", "g", "g/a", "g/b", "g/c", "g/d", "g/e", "g/f",
+                "h", "h/a", "h/b", "h/c", "h/d", "h/e", "h/f", "h/g", "i",
+                "i/a", "i/b", "i/c", "i/d", "i/e", "i/f", "i/g", "i/h", "j",
+                "j/a", "j/b", "j/c", "j/d", "j/e", "j/f", "j/g", "j/h", "j/i",
+                "k", "k/a", "k/b", "k/c", "k/d", "k/e", "k/f", "k/g", "k/h",
+                "k/i", "k/j", "l", "l/a", "l/b", "l/c", "l/d", "l/e", "l/f",
+                "l/g", "l/h", "l/i", "l/j", "l/k", "m", "m/a", "m/b", "m/c",
+                "m/d", "m/e", "m/f", "m/g", "m/h", "m/i", "m/j", "m/k", "m/l",
+                "n", "n/a", "n/b", "n/c", "n/d", "n/e", "n/f", "n/g", "n/h",
+                "n/i", "n/j", "n/k", "n/l", "n/m", "o", "o/a", "o/b", "o/c",
+                "o/d", "o/e", "o/f", "o/g", "o/h", "o/i", "o/j", "o/k", "o/l",
+                "o/m", "o/n", "p", "p/a", "p/b", "p/c", "p/d", "p/e", "p/f",
+                "p/g", "p/h", "p/i", "p/j", "p/k", "p/l", "p/m", "p/n", "p/o"
+            ],
+        );
+        assert_eq!(
+            walk_collect(td.path(), &builder.follow_links(true)).len(),
+            (1<<16) - 1
+        );
+    }
+
     // It's a little tricky to test the 'same_file_system' option since
     // we need an environment with more than one file system. We adopt a
     // heuristic where /sys is typically a distinct volume on Linux and roll
